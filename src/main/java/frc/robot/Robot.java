@@ -7,10 +7,19 @@
 
 package frc.robot;
 
+import edu.wpi.first.wpilibj.ADXRS450_Gyro;
+import edu.wpi.first.wpilibj.PWMTalonSRX;
 import edu.wpi.first.wpilibj.PowerDistributionPanel;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.Victor;
+import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.GenericHID.Hand;
+import edu.wpi.first.wpilibj.drive.DifferentialDrive;
+import edu.wpi.first.wpilibj.interfaces.Gyro;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj.SPI;
+import edu.wpi.first.wpilibj.SpeedControllerGroup;
 
 import com.ctre.phoenix.motorcontrol.can.*;
 import com.ctre.phoenix.motorcontrol.*;
@@ -25,9 +34,23 @@ import com.ctre.phoenix.motorcontrol.*;
 public class Robot extends TimedRobot {
   private static final String kDefaultAuto = "Default";
   private static final String kCustomAuto = "My Auto";
+  private PWMTalonSRX pwmTalonTest;
+  private XboxController pilot;
   private String m_autoSelected;
   private final SendableChooser<String> m_chooser = new SendableChooser<>();
   
+  //motor left and right
+  private SpeedControllerGroup m_left;
+  private SpeedControllerGroup m_right;
+
+  private DifferentialDrive drive; 
+
+  private double gVal;
+
+  Gyro gyro;
+  private static final double kAngleSetpoint = 0.0;
+	private static final double kP = 0.005; // propotional turning constant
+
   public PowerDistributionPanel testPDP;
 
   /**
@@ -36,10 +59,23 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotInit() {
-    testPDP = new PowerDistributionPanel(0);
+
+   gyro = new ADXRS450_Gyro(SPI.Port.kOnboardCS0);
+
+    m_left = new SpeedControllerGroup(new SpeedControllerGroup(new Victor(0), new Victor(1) ), new Victor(2) );
+    m_right = new SpeedControllerGroup(new SpeedControllerGroup(new Victor(3), new Victor(4) ), new Victor(5) );
+
+    drive = new DifferentialDrive(m_left,m_right);
+
+    pilot = new XboxController(0);
     m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
     m_chooser.addOption("My Auto", kCustomAuto);
     SmartDashboard.putData("Auto choices", m_chooser);
+    SmartDashboard.putNumber("gyro val", gVal);
+
+    gyro.calibrate();
+
+    SmartDashboard.putData("gyro", gyro);
   }
 
   /**
@@ -52,6 +88,8 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotPeriodic() {
+    gVal = gyro.getAngle();
+
   }
 
   /**
@@ -93,7 +131,17 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void teleopPeriodic() {
-    System.out.println(testPDP.getTotalCurrent());
+    
+   // drive.tankDrive(pilot.getY(Hand.kLeft), pilot.getY(Hand.kRight));
+    double error = 90 - gyro.getAngle();
+
+    System.out.println(gyro.getAngle());
+   // drive.tankDrive(kP * error, kP * error);
+
+   double turningValue = (kAngleSetpoint - gyro.getAngle()) * kP;
+   // Invert the direction of the turn if we are going backwards
+   turningValue = Math.copySign(turningValue, pilot.getY());
+   drive.arcadeDrive(pilot.getY(), turningValue);
   }
 
   /**
